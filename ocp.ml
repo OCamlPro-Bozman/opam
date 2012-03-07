@@ -966,8 +966,8 @@ struct
         (Server.getList t.server) in
 
       { t with home; stdout = 
-          P.printf t.stdout "%s" (BatIO.to_string (N_map.print (fun oc name -> BatString.print oc (Namespace.string_user_of_name name))
-                                                     (V_set.print (fun oc version -> BatString.print oc (Namespace.string_user_of_version version)))) map) }
+          P.printf t.stdout "%s\n" (BatIO.to_string (N_map.print (fun oc name -> BatString.print oc (Namespace.string_user_of_name name))
+                                                       (V_set.print (fun oc version -> BatString.print oc (Namespace.string_user_of_version version)))) map) }
 
   let init t o_url =
     update (match o_url with
@@ -1002,14 +1002,16 @@ struct
                             if b then max max_v (String.length (Namespace.string_user_of_version (snd n_v))) else max_v)
             (NV_map.empty, min_int, String.length s_not_installed)
             (Path.index_opam_list t.home) in
+        let t = 
+          { t with 
+            stdout = 
+              NV_map.fold (fun n_v (b, description) stdout -> 
+                P.printf stdout "%s %s %s" 
+                  (indent_left (Namespace.string_user_of_name (fst n_v)) max_n)
+                  (indent_right (if b then Namespace.string_user_of_version (snd n_v) else s_not_installed) max_v)
+                  description) map t.stdout } in
 
-        { t with 
-          stdout = 
-            NV_map.fold (fun n_v (b, description) stdout -> 
-                           P.printf stdout "%s %s %s" 
-                             (indent_left (Namespace.string_user_of_name (fst n_v)) max_n)
-                             (indent_right (if b then Namespace.string_user_of_version (snd n_v) else s_not_installed) max_v)
-                             description) map t.stdout }
+        { t with stdout = P.printf t.stdout "\n" }
 
     | Some name -> 
         let find_from_name = find_from_name name in
@@ -1031,7 +1033,7 @@ struct
           { t with
             stdout = 
               List.fold_left
-                (fun stdout (tit, desc) -> P.printf stdout "%s: %s" tit desc)
+                (fun stdout (tit, desc) -> P.printf stdout "%s: %s\n" tit desc)
                 t.stdout 
                 [ "package", Namespace.string_user_of_name name
                 ; "version", (match o_v with None -> s_not_installed | Some v -> Namespace.string_user_of_version v)
