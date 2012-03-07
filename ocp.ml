@@ -140,7 +140,7 @@ sig
     (** see [Filename.basename] *)
 
   val nv_of_extension : string (* version *) -> basename -> Namespace.name * Namespace.version
-    (** see [Filename.chop_extension], but in case of no extensions, it behaves as the identity function. 
+    (** We iterate [Filename.chop_extension] on [basename] until a fix point is reached.
         When [basename] is not of the form "NAME-VERSION", or when we can not extract the version, [string] is returned as version. *)
 
   val concat : filename -> basename -> filename
@@ -252,9 +252,11 @@ struct
 
   let nv_of_extension version (B s) = 
     let s = 
-      match try Some (Filename.chop_extension s) with _ -> None with 
-        | Some s -> s
-        | _ -> s in
+      let rec aux s =
+        match try Some (Filename.chop_extension s) with _ -> None with 
+          | Some s -> aux s
+          | _ -> s in
+      aux s in
 
     match try Some (Namespace.nv_of_string s) with _ -> None with
       | Some nv -> nv
@@ -281,7 +283,7 @@ struct
 
   module U = 
   struct
-    let mkdir = 
+    let mkdir f f_to = 
       let rec aux f_to = 
         if Sys.file_exists f_to then
           ()
@@ -290,11 +292,12 @@ struct
             aux (Filename.dirname f_to);
             Unix.mkdir f_to 0o755;
           end in
-      aux
+      begin
+        aux (Filename.dirname f_to);
+        f f_to;
+      end
 
-    let link f_from f_to = 
-      let () = mkdir (Filename.dirname f_to) in
-      Unix.link f_from f_to
+    let link f_from = mkdir (Unix.link f_from)
   end
 
   let add t f = function 
@@ -302,7 +305,7 @@ struct
       | File (Binary cts) -> 
           let () = contents (fun _ -> failwith "to complete !") Unix.unlink () t f in
           let fic = s_of_filename f in
-          let () = BatFile.with_file_out fic (fun oc -> BatString.print oc cts) in
+          let () = U.mkdir (fun fic -> BatFile.with_file_out fic (fun oc -> BatString.print oc cts)) fic in
           t
       | File (Filename fic) -> 
       let () = 
